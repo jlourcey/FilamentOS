@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FilamentOS — Print Farm Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red:        #e02020;
+    --red-dim:    #8a1212;
+    --red-glow:   rgba(224, 32, 32, 0.15);
+    --red-border: rgba(224, 32, 32, 0.35);
+    --bg:         #080a0c;
+    --bg1:        #0e1216;
+    --bg2:        #141a20;
+    --bg3:        #1c242c;
+    --line:       rgba(255,255,255,0.06);
+    --text:       #d0d8e0;
+    --text-dim:   #5a6878;
+    --text-muted: #3a4858;
+    --green:      #20c060;
+    --amber:      #e08020;
+    --blue:       #2080e0;
+    --font-head:  'Bebas Neue', sans-serif;
+    --font-ui:    'Rajdhani', sans-serif;
+    --font-mono:  'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    height: 64px;
+    background: var(--bg1);
+    border-bottom: 1px solid var(--red-border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: baseline;
+    gap: 2px;
+  }
+
+  .logo-main {
+    font-family: var(--font-head);
+    font-size: 32px;
+    letter-spacing: 3px;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .logo-os {
+    font-family: var(--font-head);
+    font-size: 32px;
+    letter-spacing: 3px;
+    color: var(--red);
+    line-height: 1;
+  }
+
+  .logo-sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-left: 16px;
+    padding-left: 16px;
+    border-left: 1px solid var(--line);
+    line-height: 1;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .clock {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Main layout ── */
+  main {
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* ── Section label ── */
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--red-border);
+  }
+
+  /* ── Stat bar ── */
+  .stat-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+
+  .stat-card {
+    background: var(--bg1);
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--red);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease;
+  }
+
+  .stat-card.active::before {
+    transform: scaleX(1);
+  }
+
+  .stat-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-family: var(--font-head);
+    font-size: 36px;
+    color: #fff;
+    letter-spacing: 1px;
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: 4px;
+  }
+
+  .stat-sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+
+  /* ── Printer grid ── */
+  .printer-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* ── Printer card ── */
+  .printer-card {
+    background: var(--bg1);
+    border: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .printer-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, var(--red-glow) 0%, transparent 60%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .printer-card.printing::after {
+    opacity: 1;
+  }
+
+  .printer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg2);
+  }
+
+  .printer-name {
+    font-family: var(--font-head);
+    font-size: 24px;
+    letter-spacing: 2px;
+    color: #fff;
+  }
+
+  .printer-ip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .printer-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .status-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid;
+  }
+
+  .status-badge.online  { color: var(--green); border-color: rgba(32,192,96,0.3); background: rgba(32,192,96,0.08); }
+  .status-badge.offline { color: var(--text-dim); border-color: var(--line); }
+  .status-badge.printing { color: var(--red); border-color: var(--red-border); background: var(--red-glow); animation: blink 1.5s ease-in-out infinite; }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ── Job info ── */
+  .job-info {
+    padding: 12px 20px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--line);
+    display: none;
+  }
+
+  .job-info.visible { display: block; }
+
+  .job-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 6px;
+  }
+
+  .job-progress-bar {
+    height: 3px;
+    background: var(--bg3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .job-progress-fill {
+    height: 100%;
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+    transition: width 1s ease;
+  }
+
+  .job-stats {
+    display: flex;
+    gap: 20px;
+    margin-top: 6px;
+  }
+
+  .job-stat {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .job-stat span {
+    color: var(--text);
+  }
+
+  /* ── CFS slots ── */
+  .slots-container {
+    padding: 16px 20px;
+  }
+
+  .slots-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .slots-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .slot {
+    position: relative;
+    aspect-ratio: 1;
+    border: 1px solid var(--line);
+    background: var(--bg2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: default;
+    transition: border-color 0.2s, transform 0.2s;
+    overflow: hidden;
+  }
+
+  .slot.present {
+    border-color: rgba(255,255,255,0.12);
+  }
+
+  .slot.active {
+    border-color: var(--red);
+    box-shadow: 0 0 16px var(--red-glow), inset 0 0 16px var(--red-glow);
+  }
+
+  .slot.active::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--red-glow);
+  }
+
+  .slot-color {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
+  }
+
+  .slot-id {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .slot.active .slot-id {
+    color: var(--red);
+  }
+
+  .slot-material {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .slot.active .slot-material {
+    color: var(--text-dim);
+  }
+
+  .slot-empty {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* CFS box divider */
+  .box-divider {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0;
+  }
+
+  .box-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .box-line {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  /* ── Spool inventory ── */
+  .inventory-table {
+    background: var(--bg1);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+
+  .table-header {
+    display: grid;
+    grid-template-columns: 48px 1fr 100px 80px 120px 120px 140px 120px;
+    padding: 10px 20px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+  }
+
+  .th {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .table-body {
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .table-body::-webkit-scrollbar { width: 4px; }
+  .table-body::-webkit-scrollbar-track { background: var(--bg); }
+  .table-body::-webkit-scrollbar-thumb { background: var(--red-dim); }
+
+  .table-row {
+    display: grid;
+    grid-template-columns: 48px 1fr 100px 80px 120px 120px 140px 120px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+    align-items: center;
+    transition: background 0.15s;
+  }
+
+  .table-row:hover { background: var(--bg2); }
+  .table-row:last-child { border-bottom: none; }
+
+  .table-row.active-row {
+    background: rgba(224, 32, 32, 0.05);
+    border-left: 2px solid var(--red);
+  }
+
+  .td {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .td.mono {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  .td.dim { color: var(--text-dim); }
+
+  .color-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.1);
+    flex-shrink: 0;
+  }
+
+  .weight-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .weight-bar {
+    height: 3px;
+    background: var(--bg3);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .weight-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s ease;
+  }
+
+  .weight-fill.high   { background: var(--green); }
+  .weight-fill.medium { background: var(--amber); }
+  .weight-fill.low    { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  .slot-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border: 1px solid var(--red-border);
+    color: var(--red);
+    background: var(--red-glow);
+    display: inline-block;
+    letter-spacing: 1px;
+  }
+
+  .slot-tag.unassigned {
+    border-color: var(--line);
+    color: var(--text-muted);
+    background: transparent;
+  }
+
+  /* ── Corner decorations ── */
+  .corner-deco {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: var(--red-dim);
+    border-style: solid;
+  }
+
+  .corner-deco.tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
+  .corner-deco.tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
+  .corner-deco.bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+  .corner-deco.br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+  /* ── Loading / Error states ── */
+  .loading-text {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 40px;
+    text-align: center;
+  }
+
+  .no-data {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    padding: 24px 20px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  /* ── Fade in animation ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-in {
+    animation: fadeIn 0.4s ease forwards;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) {
+    .printer-grid { grid-template-columns: 1fr; }
+    .stat-bar { grid-template-columns: repeat(2, 1fr); }
+    .table-header,
+    .table-row { grid-template-columns: 36px 1fr 90px 70px 100px 100px 120px 100px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-main">FILAMENT</span><span class="logo-os">OS</span>
+    <span class="logo-sub">Print Farm Control</span>
+  </div>
+  <div class="header-right">
+    <div class="status-pill">
+      <div class="pulse" id="systemPulse"></div>
+      <span id="systemStatus">CONNECTING</span>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stat bar -->
+  <div class="stat-bar" id="statBar">
+    <div class="stat-card" id="statSpools">
+      <div class="stat-label">Total Spools</div>
+      <div class="stat-value">--<span class="stat-unit">ea</span></div>
+      <div class="stat-sub">in inventory</div>
+    </div>
+    <div class="stat-card" id="statFilament">
+      <div class="stat-label">Total Remaining</div>
+      <div class="stat-value">--<span class="stat-unit">g</span></div>
+      <div class="stat-sub">across all spools</div>
+    </div>
+    <div class="stat-card" id="statPrinting">
+      <div class="stat-label">Active Printers</div>
+      <div class="stat-value">--<span class="stat-unit"></span></div>
+      <div class="stat-sub">currently printing</div>
+    </div>
+    <div class="stat-card" id="statUsed">
+      <div class="stat-label">Used Today</div>
+      <div class="stat-value">--<span class="stat-unit">g</span></div>
+      <div class="stat-sub">filament consumed</div>
+    </div>
+  </div>
+
+  <!-- Printers -->
+  <div>
+    <div class="section-label">LIVE PRINTER STATUS</div>
+    <div class="printer-grid" id="printerGrid">
+      <div class="loading-text">INITIALIZING TELEMETRY...</div>
+    </div>
+  </div>
+
+  <!-- Inventory -->
+  <div>
+    <div class="section-label">SPOOL INVENTORY</div>
+    <div class="inventory-table">
+      <div class="table-header">
+        <div class="th"></div>
+        <div class="th">Filament</div>
+        <div class="th">Material</div>
+        <div class="th">Used</div>
+        <div class="th">Remaining</div>
+        <div class="th">Progress</div>
+        <div class="th">Assignment</div>
+        <div class="th">Location</div>
+      </div>
+      <div class="table-body" id="spoolTable">
+        <div class="loading-text">LOADING INVENTORY...</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+const SPOOLMAN   = 'http://192.168.68.60:7912';
+const BRIDGE_K1C = 'http://192.168.68.60:8001';
+const BRIDGE_K2P = 'http://192.168.68.60:8002';
+
+const PRINTERS = [
+  { name: "AD5M", ip: "192.168.68.93", bridgeUrl: null,
+    slots: ["E1"], boxes: [{ id: 1, slots: ["E1"] }] },
+  { name: 'K1C',   ip: '192.168.68.79', bridgeUrl: BRIDGE_K1C,
+    slots: ['2A','2B','2C','2D'], boxes: [{ id: 2, slots: ['2A','2B','2C','2D'] }] },
+  { name: 'K2PRO', ip: '192.168.68.78', bridgeUrl: BRIDGE_K2P,
+    slots: ['1A','1B','1C','1D','2A','2B','2C','2D'],
+    boxes: [
+      { id: 1, slots: ['1A','1B','1C','1D'] },
+      { id: 2, slots: ['2A','2B','2C','2D'] }
+    ]
+  },
+];
+
+// ── Clock ─────────────────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-US', { hour12: false });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Fetch helpers ─────────────────────────────────────────────────────────
+async function fetchJSON(url) {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+// ── Decode Spoolman extra (JSON-encoded values) ───────────────────────────
+function decodeExtra(extra) {
+  if (!extra) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(extra)) {
+    try { const p = JSON.parse(v); out[k] = typeof p === 'string' ? p : v; }
+    catch { out[k] = v; }
+  }
+  return out;
+}
+
+// ── Color helpers ─────────────────────────────────────────────────────────
+function hexToRgb(hex) {
+  const h = hex.replace('#','').padStart(6,'0');
+  const n = parseInt(h, 16);
+  return [(n>>16)&255, (n>>8)&255, n&255];
+}
+
+function luminance([r,g,b]) {
+  return 0.299*r + 0.587*g + 0.114*b;
+}
+
+function weightClass(pct) {
+  if (pct > 60) return 'high';
+  if (pct > 25) return 'medium';
+  return 'low';
+}
+
+// ── Stat bar update ───────────────────────────────────────────────────────
+function updateStats(spools, bridges) {
+  const totalSpools = spools.length;
+  const totalRem    = spools.reduce((s,sp) => s + (sp.remaining_weight ?? 0), 0);
+  const totalUsed   = spools.reduce((s,sp) => s + (sp.used_weight ?? 0), 0);
+  const activePrint = bridges.filter(b => b?.current_job).length;
+
+  const bar = document.getElementById('statBar');
+  bar.innerHTML = `
+    <div class="stat-card ${totalSpools > 0 ? 'active' : ''}">
+      <div class="stat-label">Total Spools</div>
+      <div class="stat-value">${totalSpools}<span class="stat-unit">ea</span></div>
+      <div class="stat-sub">in inventory</div>
+    </div>
+    <div class="stat-card ${totalRem > 0 ? 'active' : ''}">
+      <div class="stat-label">Total Remaining</div>
+      <div class="stat-value">${Math.round(totalRem).toLocaleString()}<span class="stat-unit">g</span></div>
+      <div class="stat-sub">across all spools</div>
+    </div>
+    <div class="stat-card ${activePrint > 0 ? 'active' : ''}">
+      <div class="stat-label">Active Printers</div>
+      <div class="stat-value">${activePrint}<span class="stat-unit">/ ${PRINTERS.length}</span></div>
+      <div class="stat-sub">${activePrint > 0 ? 'currently printing' : 'idle'}</div>
+    </div>
+    <div class="stat-card ${totalUsed > 0 ? 'active' : ''}">
+      <div class="stat-label">Total Used</div>
+      <div class="stat-value">${Math.round(totalUsed).toLocaleString()}<span class="stat-unit">g</span></div>
+      <div class="stat-sub">filament consumed</div>
+    </div>
+  `;
+}
+
+// ── Printer cards ─────────────────────────────────────────────────────────
+function renderPrinterCard(printer, bridge, spoolsBySlot) {
+
+  // AD5M: no bridge — show spool assignment from Spoolman only
+  if (!printer.bridgeUrl) {
+    // Match by slot assignment first, then fall back to location field
+    const assignedSpool = spoolsBySlot[`${printer.ip}:E1`]
+      ?? spoolsBySlot[`__location__:FF AD5M`];
+    const fil = assignedSpool?.filament ?? {};
+    const hex = '#' + (fil.color_hex ?? '444444').replace('#','');
+    const rem = assignedSpool?.remaining_weight ?? 0;
+    const mat = fil.material ?? '';
+    return `
+      <div class="printer-card animate-in" style="position:relative;">
+        <div class="corner-deco tl"></div><div class="corner-deco tr"></div>
+        <div class="corner-deco bl"></div><div class="corner-deco br"></div>
+        <div class="printer-header">
+          <div>
+            <div class="printer-name">${printer.name}</div>
+            <div class="printer-ip">${printer.ip} &middot; Flashforge</div>
+          </div>
+          <div class="printer-status">
+            <div class="status-badge offline">DIRECT</div>
+          </div>
+        </div>
+        <div class="slots-container">
+          <div class="slots-label">EXTRUDER STATUS</div>
+          <div class="slots-grid" style="grid-template-columns:1fr;">
+            ${assignedSpool ? `
+              <div class="slot present" style="aspect-ratio:unset;flex-direction:row;justify-content:flex-start;gap:12px;padding:12px 16px;">
+                <div class="slot-color" style="background:${hex};width:36px;height:36px;flex-shrink:0;"></div>
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <span class="slot-id">E1 &mdash; ${fil.name || 'Unknown'}</span>
+                  <span class="slot-material">${mat} &middot; ${Math.round(rem)}g remaining</span>
+                  <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted)">${fil.vendor?.name || ''}</span>
+                </div>
+              </div>` : `
+              <div class="slot" style="aspect-ratio:unset;padding:20px;">
+                <span class="slot-empty">NO SPOOL ASSIGNED</span>
+                <span class="slot-id" style="margin-top:4px;">E1</span>
+              </div>`}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const connected = bridge?.printer_connected;
+  const cfsConn   = bridge?.cfs_connected;
+  const job       = bridge?.current_job || '';
+  const realActive = bridge?.cfs_active_slot;
+
+  const jobG = bridge?.current_job_filament_g ?? 0;
+  const statusClass = !connected ? 'offline' : job ? 'printing' : 'online';
+  const statusText  = !connected ? 'OFFLINE' : job ? 'PRINTING' : 'ONLINE';
+  const isPrinting  = !!job;
+
+  // Build slot HTML
+  let slotsHTML = '';
+  for (const box of printer.boxes) {
+    slotsHTML += `
+      <div class="box-divider">
+        <span class="box-label">CFS BOX ${box.id}</span>
+        <div class="box-line"></div>
+      </div>
+    `;
+    for (const slotId of box.slots) {
+      const cfsSlot = bridge?.cfs_slots?.[slotId] ?? {};
+      const present = cfsSlot.present;
+      const bridgeColor = cfsSlot.color ? cfsSlot.color : null;
+      const mat     = cfsSlot.material || '';
+      const isActive = realActive === slotId;
+      const assignedSpool = spoolsBySlot[`${printer.ip}:${slotId}`];
+
+      // Prefer Spoolman's color (accurate) over bridge color (CFS sensor estimate)
+      const spoolmanColor = assignedSpool?.filament?.color_hex
+        ? '#' + assignedSpool.filament.color_hex.replace('#','')
+        : null;
+      const color = spoolmanColor ?? bridgeColor;
+
+      if (!present) {
+        slotsHTML += `
+          <div class="slot">
+            <span class="slot-empty">EMPTY</span>
+            <span class="slot-id">${slotId}</span>
+          </div>`;
+      } else {
+        const colorStyle = color ? `background:${color};` : 'background:#333;';
+        const remG = assignedSpool?.remaining_weight;
+        const displayMat = assignedSpool?.filament?.material || mat;
+        slotsHTML += `
+          <div class="slot present ${isActive ? 'active' : ''}">
+            <div class="slot-color" style="${colorStyle}"></div>
+            <span class="slot-id">${slotId}</span>
+            <span class="slot-material">${displayMat}${remG ? ' · ' + Math.round(remG) + 'g' : ''}</span>
+          </div>`;
+      }
+    }
+  }
+
+  const jobBar = job ? `
+    <div class="job-info visible">
+      <div class="job-name">▶ ${job}</div>
+      <div class="job-progress-bar">
+        <div class="job-progress-fill" style="width:${Math.min(100, jobG / 10)}%"></div>
+      </div>
+      <div class="job-stats">
+        <div class="job-stat">CONSUMED <span>${jobG.toFixed(1)}g</span></div>
+        <div class="job-stat">SLOT <span>${realActive || '—'}</span></div>
+        ${cfsConn ? '<div class="job-stat">CFS <span>CONNECTED</span></div>' : ''}
+      </div>
+    </div>
+  ` : `<div class="job-info"></div>`;
+
+  return `
+    <div class="printer-card ${isPrinting ? 'printing' : ''} animate-in" style="position:relative;">
+      <div class="corner-deco tl"></div>
+      <div class="corner-deco tr"></div>
+      <div class="corner-deco bl"></div>
+      <div class="corner-deco br"></div>
+      <div class="printer-header">
+        <div>
+          <div class="printer-name">${printer.name}</div>
+          <div class="printer-ip">${printer.ip}</div>
+        </div>
+        <div class="printer-status">
+          <div class="status-badge ${statusClass}">${statusText}</div>
+          ${cfsConn ? '<div class="status-badge online" style="font-size:9px;">CFS OK</div>' : ''}
+        </div>
+      </div>
+      ${jobBar}
+      <div class="slots-container">
+        <div class="slots-label">CFS SLOT STATUS</div>
+        <div class="slots-grid">
+          ${slotsHTML}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Spool table ───────────────────────────────────────────────────────────
+function renderSpoolTable(spools, activeSlots) {
+  if (!spools.length) {
+    return '<div class="no-data">NO SPOOLS IN INVENTORY</div>';
+  }
+
+  return spools.map((sp, i) => {
+    const fil  = sp.filament ?? {};
+    const ext  = decodeExtra(sp.extra);
+    const hex  = '#' + (fil.color_hex ?? 'cccccc').replace('#','');
+    const rem  = sp.remaining_weight ?? 0;
+    const used = sp.used_weight ?? 0;
+    const total = (fil.weight ?? 1000);
+    const pct  = Math.round((rem / total) * 100);
+    const wClass = weightClass(pct);
+    const slot  = ext.cfs_slot || '';
+    const printerIp = ext.cfs_printer || '';
+    const printerName = printerIp === '192.168.68.79' ? 'K1C'
+                      : printerIp === '192.168.68.78' ? 'K2Pro' : '';
+    const isActive = slot && activeSlots.has(`${printerIp}:${slot}`);
+
+    return `
+      <div class="table-row ${isActive ? 'active-row' : ''}" style="animation-delay:${i * 30}ms">
+        <div class="td"><div class="color-dot" style="background:${hex}; border-color: rgba(255,255,255,0.15)"></div></div>
+        <div class="td">${fil.name || `Spool #${sp.id}`}<br>
+          <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim)">${fil.vendor?.name || ''}</span>
+        </div>
+        <div class="td">${fil.material || '—'}</div>
+        <div class="td mono dim">${Math.round(used)}g</div>
+        <div class="td"><span style="color:${wClass==='low'?'var(--red)':wClass==='medium'?'var(--amber)':'var(--green)'};font-weight:600">${Math.round(rem)}g</span></div>
+        <div class="td">
+          <div class="weight-bar-wrap">
+            <div class="weight-bar"><div class="weight-fill ${wClass}" style="width:${pct}%"></div></div>
+            <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted)">${pct}%</span>
+          </div>
+        </div>
+        <div class="td">
+          ${slot
+            ? `<span class="slot-tag">${printerName} · ${slot}</span>`
+            : `<span class="slot-tag unassigned">UNASSIGNED</span>`}
+        </div>
+        <div class="td mono dim">${sp.location || '—'}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Main refresh ──────────────────────────────────────────────────────────
+async function refresh() {
+  const [spoolData, bridge1, bridge2] = await Promise.all([
+    fetchJSON(`${SPOOLMAN}/api/v1/spool`),
+    fetchJSON(`${BRIDGE_K1C}/api/ui/state`),
+    fetchJSON(`${BRIDGE_K2P}/api/ui/state`),
+  ]);
+
+  const spools  = spoolData ?? [];
+  const b1state = bridge1?.result ?? null;
+  const b2state = bridge2?.result ?? null;
+  const bridges = [null, b1state, b2state];
+
+  // System status
+  const anyOnline = spools.length > 0;
+  document.getElementById('systemPulse').style.background = anyOnline ? 'var(--green)' : 'var(--red)';
+  document.getElementById('systemPulse').style.boxShadow  = anyOnline ? '0 0 8px var(--green)' : '0 0 8px var(--red)';
+  document.getElementById('systemStatus').textContent = anyOnline ? 'SYSTEM NOMINAL' : 'SPOOLMAN OFFLINE';
+
+  // Build slot → spool lookup
+  const spoolsBySlot = {};
+  for (const sp of spools) {
+    const ext = decodeExtra(sp.extra);
+    if (ext.cfs_slot && ext.cfs_printer) {
+      spoolsBySlot[`${ext.cfs_printer}:${ext.cfs_slot}`] = sp;
+    }
+    // Also index by location for direct-connect printers like AD5M
+    if (sp.location) {
+      spoolsBySlot[`__location__:${sp.location}`] = sp;
+    }
+  }
+
+  // Active slots set
+  const activeSlots = new Set();
+  const bridgeStates = [null, b1state, b2state];
+  const printerIps = [PRINTERS[0].ip, PRINTERS[1].ip, PRINTERS[2].ip];
+  bridgeStates.forEach((b, i) => {
+    if (b?.cfs_active_slot) activeSlots.add(`${printerIps[i]}:${b.cfs_active_slot}`);
+  });
+
+  // Render stats
+  updateStats(spools, bridges);
+
+  // Render printers
+  const grid = document.getElementById('printerGrid');
+  grid.innerHTML = PRINTERS.map((p, i) =>
+    renderPrinterCard(p, bridgeStates[i], spoolsBySlot)
+  ).join('');
+
+  // Sort spools: active first, then by remaining weight desc
+  const sorted = [...spools].sort((a, b) => {
+    const ae = decodeExtra(a.extra), be = decodeExtra(b.extra);
+    const aA = ae.cfs_slot ? 0 : 1, bA = be.cfs_slot ? 0 : 1;
+    if (aA !== bA) return aA - bA;
+    return (b.remaining_weight ?? 0) - (a.remaining_weight ?? 0);
+  });
+
+  // Render table
+  document.getElementById('spoolTable').innerHTML = renderSpoolTable(sorted, activeSlots);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+refresh();
+setInterval(refresh, 10000); // refresh every 10 seconds
+</script>
+</body>
+</html>
